@@ -4,14 +4,40 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Сколько я стою?</title>
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
   <main class="page">
     <section class="hero">
       <div class="hero__container">
-        <h1>Сколько я стою?</h1>
-        <p>Анализируй навыки, регион и формат работы и получай рыночную зарплатную вилку вместе с планом развития.</p>
+        <div class="hero-header">
+          <div>
+            <h1>Сколько я стою?</h1>
+            <p>Анализируй навыки, регион и формат работы и получай рыночную зарплатную вилку вместе с планом развития.</p>
+          </div>
+          <div class="header-actions">
+            <button type="button" id="model-settings-btn" class="header-action-btn model-btn" aria-label="Выбрать модель">
+              <span class="header-action-btn__label">Модель</span>
+              <span id="active-model-badge" class="model-badge">Gemma 4</span>
+            </button>
+            <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Переключить тему" aria-pressed="false" title="Переключить тему">
+              <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+              <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -37,6 +63,7 @@
         </div>
 
         <p id="status" class="status"></p>
+        <button type="button" id="demo-btn" class="demo-button">Показать пример результата</button>
       </form>
     </section>
 
@@ -76,11 +103,40 @@
           <h3>График зарплат</h3>
           <div id="chart" class="chart-placeholder">Здесь появится график</div>
         </div>
+
+        <div class="result-block">
+          <h3>Подходящие вакансии на hh.ru</h3>
+          <ul id="vacancies-list" class="vacancies-list"></ul>
+        </div>
       </div>
     </section>
   </main>
 
+  <div id="model-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close-modal="true"></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+      <div class="modal__header">
+        <div>
+          <h2 id="model-modal-title">Выбор модели</h2>
+          <p>Выбери модель для интервью и итогового анализа.</p>
+        </div>
+        <button type="button" id="close-model-modal" class="modal__close" aria-label="Закрыть окно">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div id="model-options" class="model-options"></div>
+
+      <div class="modal__footer">
+        <button type="button" id="save-model-settings" class="primary-action">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

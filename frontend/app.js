@@ -4,9 +4,133 @@ const resultSection = document.getElementById("result");
 const chatHistoryEl = document.getElementById("chat-history");
 const sendMsgBtn = document.getElementById("send-msg-btn");
 const textInput = document.getElementById("text");
+const demoBtnEl = document.getElementById("demo-btn");
+const themeToggleBtn = document.getElementById("theme-toggle");
+const modelSettingsBtn = document.getElementById("model-settings-btn");
+const modelModalEl = document.getElementById("model-modal");
+const closeModelModalBtn = document.getElementById("close-model-modal");
+const saveModelSettingsBtn = document.getElementById("save-model-settings");
+const modelOptionsEl = document.getElementById("model-options");
+const activeModelBadgeEl = document.getElementById("active-model-badge");
 
 let chatHistory = [];
 let isWaiting = false;
+
+const THEME_STORAGE_KEY = "vega-theme";
+const MODEL_STORAGE_KEY = "vega-selected-model";
+const MODEL_OPTIONS = [
+  {
+    id: "google/gemma-4-26b-a4b-it:free",
+    name: "Gemma 4",
+    tag: "Быстро",
+    description: "Сбалансированный вариант для интервью и оценки зарплатной вилки.",
+  },
+  {
+    id: "openai/gpt-oss-120b:free",
+    name: "GPT OSS 120B",
+    tag: "Подробно",
+    description: "Более развернутые ответы и хорошая глубина в техническом диалоге.",
+  },
+  {
+    id: "openrouter/owl-alpha",
+    name: "Owl Alpha",
+    tag: "Сильный reasoning",
+    description: "Подходит для более строгих уточняющих вопросов и сложных стеков.",
+  },
+];
+
+let selectedModelId = localStorage.getItem(MODEL_STORAGE_KEY) || MODEL_OPTIONS[0].id;
+
+function getModelMeta(modelId = selectedModelId) {
+  return MODEL_OPTIONS.find((option) => option.id === modelId) || MODEL_OPTIONS[0];
+}
+
+function updateModelBadge() {
+  const meta = getModelMeta();
+  activeModelBadgeEl.textContent = meta.name;
+}
+
+function renderModelOptions() {
+  modelOptionsEl.innerHTML = MODEL_OPTIONS.map((option) => `
+    <label class="model-option" data-model-id="${option.id}">
+      <input type="radio" name="model-option" value="${option.id}" ${option.id === selectedModelId ? "checked" : ""}>
+      <span>
+        <span class="model-option__title-row">
+          <span class="model-option__title">${option.name}</span>
+          <span class="model-option__tag">${option.tag}</span>
+        </span>
+        <span class="model-option__description">${option.description}</span>
+      </span>
+    </label>
+  `).join("");
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  themeToggleBtn.setAttribute("aria-pressed", String(theme === "light"));
+  themeToggleBtn.setAttribute("title", theme === "light" ? "Включить тёмную тему" : "Включить светлую тему");
+}
+
+function initializeTheme() {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+  applyTheme(savedTheme || (prefersLight ? "light" : "dark"));
+}
+
+function openModelModal() {
+  renderModelOptions();
+  modelModalEl.classList.remove("hidden");
+  modelModalEl.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeModelModal() {
+  modelModalEl.classList.add("hidden");
+  modelModalEl.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+initializeTheme();
+updateModelBadge();
+
+themeToggleBtn.addEventListener("click", () => {
+  const currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  applyTheme(currentTheme === "light" ? "dark" : "light");
+});
+
+modelSettingsBtn.addEventListener("click", openModelModal);
+closeModelModalBtn.addEventListener("click", closeModelModal);
+saveModelSettingsBtn.addEventListener("click", () => {
+  const checked = modelOptionsEl.querySelector('input[name="model-option"]:checked');
+  if (checked) {
+    selectedModelId = checked.value;
+    localStorage.setItem(MODEL_STORAGE_KEY, selectedModelId);
+    updateModelBadge();
+  }
+  closeModelModal();
+});
+
+modelModalEl.addEventListener("click", (event) => {
+  if (event.target.dataset.closeModal === "true") {
+    closeModelModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !modelModalEl.classList.contains("hidden")) {
+    closeModelModal();
+  }
+});
+
+function autoResizeTextarea(textarea) {
+  textarea.style.height = 'auto';
+  textarea.style.height = (textarea.scrollHeight) + 'px';
+}
+
+textInput.addEventListener('input', function() {
+  autoResizeTextarea(this);
+});
 
 function addMessageToChat(role, content) {
   const msgDiv = document.createElement("div");
@@ -62,7 +186,7 @@ sendMsgBtn.addEventListener("click", async () => {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, chat_history: chatHistory }),
+      body: JSON.stringify({ text, chat_history: chatHistory, model: selectedModelId }),
     });
 
     if (!response.ok) {
@@ -136,6 +260,73 @@ textInput.addEventListener("keydown", (e) => {
   }
 });
 
+// Demo button handler
+demoBtnEl.addEventListener("click", (e) => {
+  e.preventDefault();
+  
+  const demoData = {
+    profile_title: "Senior Python Developer",
+    min_salary: 150000,
+    max_salary: 250000,
+    average_salary: 195000,
+    vacancies_found: 5,
+    skills: ["Python", "FastAPI", "PostgreSQL", "Docker", "AWS"],
+    additional_skills: ["Kubernetes", "Redis", "Celery", "GraphQL", "Microservices"],
+    development_plan: [
+      "Углубить знания Kubernetes и DevOps практик",
+      "Изучить архитектуру микросервисов",
+      "Развить навыки лидерства и менторства",
+      "Освоить новые облачные технологии (GCP, Azure)"
+    ],
+    salary_values: [
+      {
+        salary_from: 160000,
+        salary_to: 220000,
+        currency: "RUR",
+        vacancy_title: "Senior Python Developer",
+        vacancy_url: "https://hh.ru/vacancy/example1",
+        employer_name: "Компания А"
+      },
+      {
+        salary_from: 150000,
+        salary_to: 240000,
+        currency: "RUR",
+        vacancy_title: "Lead Python Engineer",
+        vacancy_url: "https://hh.ru/vacancy/example2",
+        employer_name: "Компания Б"
+      },
+      {
+        salary_from: 170000,
+        salary_to: 260000,
+        currency: "RUR",
+        vacancy_title: "Backend Architect",
+        vacancy_url: "https://hh.ru/vacancy/example3",
+        employer_name: "Компания В"
+      },
+      {
+        salary_from: 140000,
+        salary_to: 210000,
+        currency: "RUR",
+        vacancy_title: "Python Backend Developer",
+        vacancy_url: "https://hh.ru/vacancy/example4",
+        employer_name: "Компания Г"
+      },
+      {
+        salary_from: 155000,
+        salary_to: 235000,
+        currency: "RUR",
+        vacancy_title: "Senior Software Engineer",
+        vacancy_url: "https://hh.ru/vacancy/example5",
+        employer_name: "Компания Д"
+      }
+    ]
+  };
+  
+  statusEl.textContent = "Демонстрация результатов анализа";
+  form.parentElement.classList.add("hidden");
+  renderResult(demoData);
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -161,7 +352,8 @@ form.addEventListener("submit", async (event) => {
   try {
     const requestBody = { 
       text: text || "Оцени мои навыки на основе нашего диалога.", 
-      chat_history: chatHistory
+      chat_history: chatHistory,
+      model: selectedModelId,
     };
 
     const response = await fetch("/api/analyze", {
@@ -180,6 +372,7 @@ form.addEventListener("submit", async (event) => {
     const data = await response.json();
     renderResult(data);
     statusEl.textContent = "Анализ завершен.";
+    form.parentElement.classList.add("hidden");
   } catch (error) {
     statusEl.textContent = `Ошибка: ${error.message}`;
   }
@@ -216,15 +409,25 @@ function renderResult(data) {
   // Обновляем результаты
   const resultCard = resultSection.querySelector(".result-card");
   resultCard.innerHTML = `
-    <h2>${profileTitle}</h2>
+    <div class="results-header">
+      <h2>${profileTitle}</h2>
+      <button type="button" class="new-analysis-btn">Новый анализ</button>
+    </div>
     
     <div class="market-assessment">
       <p><strong>Оценка рынка:</strong> ${minSalary.toLocaleString("ru-RU")} - ${maxSalary.toLocaleString("ru-RU")} рублей</p>
     </div>
 
     <div class="result-block">
-      <h3>Сильные навыки:</h3>
-      <ul class="skills-list">
+      <div class="block-header">
+        <h3>Сильные навыки:</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <ul class="skills-list block-content">
         ${data.skills
           .slice(0, 5)
           .map((skill) => `<li>- ${skill}</li>`)
@@ -233,12 +436,18 @@ function renderResult(data) {
     </div>
 
     <div class="result-block">
-      <h3>Часто требуют дополнительно:</h3>
-      <ul class="additional-skills">
-        ${data.development_plan
+      <div class="block-header">
+        <h3>Часто требуют дополнительно:</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <ul class="additional-skills block-content">
+        ${(data.additional_skills || data.development_plan)
           .slice(0, 5)
           .map((item) => {
-            // Убираем нумерацию если есть
             const cleanItem = item.replace(/^\d+\.\s+/, "");
             return `<li>- ${cleanItem}</li>`;
           })
@@ -247,12 +456,18 @@ function renderResult(data) {
     </div>
 
     <div class="result-block">
-      <h3>Что может поднять вилку:</h3>
-      <ol class="salary-boost">
+      <div class="block-header">
+        <h3>Что может поднять вилку:</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <ol class="salary-boost block-content">
         ${data.development_plan
           .slice(0, 4)
           .map((item) => {
-            // Убираем нумерацию если есть
             const cleanItem = item.replace(/^\d+\.\s+/, "");
             return `<li>${cleanItem}</li>`;
           })
@@ -261,8 +476,15 @@ function renderResult(data) {
     </div>
 
     <div class="result-block">
-      <h3>Статистика вакансий:</h3>
-      <div class="stats-grid">
+      <div class="block-header">
+        <h3>Статистика вакансий:</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="stats-grid block-content">
         <div class="stat-item">
           <span>Вакансий найдено</span>
           <strong>${data.vacancies_found}</strong>
@@ -283,10 +505,84 @@ function renderResult(data) {
     </div>
 
     <div class="result-block">
-      <h3>График зарплат по вакансиям</h3>
-      <div id="chart" class="chart-placeholder"></div>
+      <div class="block-header">
+        <h3>График зарплат по вакансиям</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div id="chart" class="chart-placeholder block-content"></div>
+    </div>
+
+    <div class="result-block">
+      <div class="block-header">
+        <h3>Подходящие вакансии на hh.ru</h3>
+        <button class="collapse-btn" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <ul id="vacancies-list" class="vacancies-list block-content">
+        ${data.salary_values
+          .filter(v => v.vacancy_url)
+          .map((v, index) => {
+            const salary = v.salary_to ? `${Math.round(v.salary_to).toLocaleString("ru-RU")}₽` : "—";
+            return `
+              <li class="vacancy-item">
+                <a href="${v.vacancy_url}" target="_blank" class="vacancy-link" rel="noopener noreferrer">
+                  <strong>${v.vacancy_title || `Вакансия ${index + 1}`}</strong>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="external-link-icon">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </a>
+                <div class="vacancy-details">
+                  <span class="employer">${v.employer_name || "Компания"}</span>
+                  <span class="salary">${salary}</span>
+                </div>
+              </li>
+            `;
+          })
+          .join("")}
+      </ul>
     </div>
   `;
+
+  // Добавляем обработчики для кнопок collapse
+  const collapseButtons = resultCard.querySelectorAll(".collapse-btn");
+  collapseButtons.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const content = btn.closest(".block-header").nextElementSibling;
+      const isExpanded = btn.getAttribute("aria-expanded") === "true";
+      
+      if (isExpanded) {
+        content.style.display = "none";
+        btn.setAttribute("aria-expanded", "false");
+        btn.classList.add("collapsed");
+      } else {
+        content.style.display = "";
+        btn.setAttribute("aria-expanded", "true");
+        btn.classList.remove("collapsed");
+      }
+    });
+  });
+
+  // Обработчик для кнопки "Новый анализ"
+  const newAnalysisBtn = resultCard.querySelector(".new-analysis-btn");
+  if (newAnalysisBtn) {
+    newAnalysisBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      form.parentElement.classList.remove("hidden");
+      resultSection.classList.add("hidden");
+      textInput.focus();
+      textInput.value = "";
+    });
+  }
 
   renderChart(data.salary_values);
 }

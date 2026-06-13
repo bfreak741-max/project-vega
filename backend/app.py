@@ -46,11 +46,14 @@ class AnalyzeRequest(BaseModel):
     employment_type: str
     vacancy_count: Optional[int] = 50
 
-# --- Модель для данных о зарплате ---
+# --- Модель для данных о зарплате и вакансии ---
 class SalaryData(BaseModel):
     salary_from: Optional[float] = None
     salary_to: Optional[float] = None
     currency: Optional[str] = None
+    vacancy_title: Optional[str] = None
+    vacancy_url: Optional[str] = None
+    employer_name: Optional[str] = None
 
 # --- Ответная схема с аналитикой и рекомендациями ---
 class AnalyzeResponse(BaseModel):
@@ -60,6 +63,7 @@ class AnalyzeResponse(BaseModel):
     vacancies_found: int
     salary_values: List[SalaryData]
     skills: List[str]
+    additional_skills: List[str]
     development_plan: List[str]
     message: str
     profile_title: Optional[str] = None
@@ -72,6 +76,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     text: str
     chat_history: Optional[List[ChatMessage]] = []
+    model: Optional[str] = None
 
 class ChatResponse(BaseModel):
     message: str
@@ -79,6 +84,7 @@ class ChatResponse(BaseModel):
 class AnalyzeRequest(BaseModel):
     text: str # Последнее сообщение пользователя
     chat_history: Optional[List[ChatMessage]] = [] # История предыдущего диалога
+    model: Optional[str] = None
     region: str = "1"
     schedule: str = ""
     employment: str = ""
@@ -92,6 +98,7 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 # Выбор провайдера LLM: 'openrouter' или 'openai'
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
+DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 
 # --- КОНКРЕТНЫЕ IT-ТЕХНОЛОГИИ (основной критерий) ---
 TECH_KEYWORDS = {
@@ -206,7 +213,7 @@ def search_hh_vacancies(query: str, region: str = "1", schedule: str = "", emplo
             if experience: params["experience"] = experience
             if part_time: params["part_time"] = part_time 
 
-            response = requests.get(HH_API_URL, params=params, headers=headers, timeout=15)
+            response = requests.get(HH_API_URL, params=params, headers=headers, timeout=60)
             if response.status_code != 200:
                 break
 
@@ -286,16 +293,63 @@ def calculate_salary_statistics(salary_values: List[Dict[str, Optional[int]]]) -
     }
 
 
+def clean_llm_list_output(raw_text: str, max_items: int = 10) -> List[str]:
+    """
+    Очищает ответ LLM, оставляя только пункты нумерованного/маркированного списка.
+    Убирает преамбулу, разговорный мусор, пустые строки.
+    """
+    import re
+    lines = raw_text.strip().splitlines()
+    result = []
+    # Паттерн для строки-пункта списка: начинается с цифры, маркера или **
+    list_item_re = re.compile(r'^\s*(?:\d+[.)\-]|[-•*]|\*\*)\s+')
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Пропускаем строки, похожие на разговорную преамбулу
+        if not list_item_re.match(stripped):
+            # Если строка не является пунктом списка, пропускаем
+            # (это преамбула вроде "Привет! Как ментор, я вижу...")
+            continue
+        # Убираем нумерацию/маркеры, оставляем только текст
+        clean = re.sub(r'^\s*(?:\d+[.)\-]|[-•*])\s+', '', stripped).strip()
+        if clean and len(clean) > 3:
+            result.append(clean)
+        if len(result) >= max_items:
+            break
+
+    # Фолбэк: если ничего не нашли через list_item_re,
+    # берём все непустые строки кроме первых 1-2 (скорее всего преамбула)
+    if not result:
+        non_empty = [l.strip() for l in lines if l.strip()]
+        # Пропускаем строки без конкретного содержания (преамбула)
+        for line in non_empty:
+            clean = re.sub(r'^\s*(?:\d+[.)\-]|[-•*])\s*', '', line).strip()
+            if len(clean) > 10 and not any(w in clean.lower() for w in [
+                'привет', 'как ментор', 'давай начн', 'расскажи',
+                'пришли', 'жду тво', 'чтобы я мог', 'мне нужно понять'
+            ]):
+                result.append(clean)
+            if len(result) >= max_items:
+                break
+
+    return result
+
+
 def generate_mock_llm_response(prompt: str) -> str:
     return "Анализ выполнен. [ИНТЕРВЬЮ ЗАВЕРШЕНО]"
 
-def call_openrouter(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False):
+def call_openrouter(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False, system_prompt: str | None = SYSTEM_PROMPT, model: str | None = None):
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         logger.error("OPENROUTER_API_KEY is not set in environment!")
         raise HTTPException(status_code=500, detail="Отсутствует ключ OPENROUTER_API_KEY")
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
     if chat_history:
         for msg in chat_history:
             messages.append({"role": msg.role, "content": msg.content})
@@ -306,7 +360,7 @@ def call_openrouter(prompt: str, chat_history: List[ChatMessage] | None = None, 
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "google/gemma-4-26b-a4b-it:free",
+        "model": model or DEFAULT_MODEL,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 1500,
@@ -343,15 +397,15 @@ def call_openrouter(prompt: str, chat_history: List[ChatMessage] | None = None, 
     except requests.exceptions.Timeout:
         raise HTTPException(status_code=504, detail="OpenRouter API timeout")
 
-def call_openai(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False):
-    return call_openrouter(prompt, chat_history, stream)
+def call_openai(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False, system_prompt: str | None = SYSTEM_PROMPT, model: str | None = None):
+    return call_openrouter(prompt, chat_history, stream, system_prompt=system_prompt, model=model)
 
-def call_llm(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False):
+def call_llm(prompt: str, chat_history: List[ChatMessage] | None = None, stream: bool = False, system_prompt: str | None = SYSTEM_PROMPT, model: str | None = None):
     try:
         if LLM_PROVIDER == "openrouter":
-            return call_openrouter(prompt, chat_history, stream=stream)
+            return call_openrouter(prompt, chat_history, stream=stream, system_prompt=system_prompt, model=model)
         else:
-            return call_openai(prompt, chat_history, stream=stream)
+            return call_openai(prompt, chat_history, stream=stream, system_prompt=system_prompt, model=model)
     except Exception as e:
         logger.error(f"LLM call failed: {str(e)}", exc_info=True)
         if stream:
@@ -379,7 +433,34 @@ def build_filters_extraction_prompt(text: str) -> str:
     )
 
 def build_development_plan_prompt(skills: List[str], region: str, filters: dict):
-    return f"Ты — Senior разработчик и ментор. Твоя задача составить план развития для кандидата.\nКандидат указал навыки: {', '.join(skills)}.\nОпираясь на эти данные, напиши 4-6 шагов: какие навыки подтянуть, курсы пройти. Ответь в виде нумерованного списка."
+    return (
+        "ЗАДАЧА: Составь план развития для IT-специалиста.\n"
+        f"Навыки кандидата: {', '.join(skills)}.\n\n"
+        "ФОРМАТ ОТВЕТА: Только нумерованный список из 4-6 пунктов. "
+        "Каждый пункт — конкретный шаг: какой навык подтянуть, что изучить, какой курс пройти.\n"
+        "НЕ пиши приветствий, преамбул, вводных слов и вопросов. "
+        "НЕ задавай вопросов. НЕ начинай с 'Привет'. "
+        "Сразу начинай с '1.' — первого пункта.\n\n"
+        "Пример формата:\n"
+        "1. Изучить Kubernetes: Helm-чарты, настройка кластеров, мониторинг.\n"
+        "2. Освоить AWS: EC2, S3, Lambda.\n"
+    )
+
+
+def build_additional_skills_prompt(skills: List[str], dialogue_text: str):
+    return (
+        "ЗАДАЧА: На основе навыков кандидата определи, какие дополнительные технологии и навыки "
+        "чаще всего требуют работодатели для специалистов с таким стеком.\n"
+        f"Навыки кандидата: {', '.join(skills)}.\n\n"
+        "ФОРМАТ ОТВЕТА: Только нумерованный список из 4-6 технологий/навыков, которых НЕТ в списке кандидата, "
+        "но которые часто встречаются в вакансиях рядом с его стеком.\n"
+        "Каждый пункт — название технологии или навыка (коротко, 2-5 слов).\n"
+        "НЕ пиши приветствий, преамбул и пояснений. Сразу начинай с '1.'.\n\n"
+        "Пример формата:\n"
+        "1. Kubernetes\n"
+        "2. Apache Airflow\n"
+        "3. Terraform\n"
+    )
 
 def build_profile_title_prompt(text: str) -> str:
     return (
@@ -390,7 +471,7 @@ def build_profile_title_prompt(text: str) -> str:
 
 @app.post("/api/chat")
 def chat(request: ChatRequest):
-    return StreamingResponse(call_llm(request.text, request.chat_history, stream=True), media_type="text/plain")
+    return StreamingResponse(call_llm(request.text, request.chat_history, stream=True, model=request.model), media_type="text/plain")
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 def analyze(request: AnalyzeRequest):
@@ -404,11 +485,11 @@ def analyze(request: AnalyzeRequest):
             raise HTTPException(status_code=400, detail=error_msg)
 
         logger.info("Extracting skills from dialogue...")
-        raw_skills = call_llm(build_skill_extraction_prompt(full_dialogue_text))
+        raw_skills = call_llm(build_skill_extraction_prompt(full_dialogue_text), system_prompt=None, model=request.model)
         skills = [line.strip(" ").lstrip("0123456789.- ") for line in raw_skills.splitlines() if line.strip()][:10]
 
         logger.info("Extracting filters from dialogue...")
-        raw_filters = call_llm(build_filters_extraction_prompt(full_dialogue_text))
+        raw_filters = call_llm(build_filters_extraction_prompt(full_dialogue_text), system_prompt=None, model=request.model)
         filters = {}
         try:
             import json
@@ -440,13 +521,32 @@ def analyze(request: AnalyzeRequest):
         salary_dicts = [extract_salary(vacancy) for vacancy in vacancies]
         stats = calculate_salary_statistics(salary_dicts)
         
-        salary_values = [SalaryData(salary_from=float(s["from"]) if s["from"] else None, salary_to=float(s["to"]) if s["to"] else None, currency=s["currency"]) for s in salary_dicts]
+        salary_values = [
+            SalaryData(
+                salary_from=float(s["from"]) if s["from"] else None, 
+                salary_to=float(s["to"]) if s["to"] else None, 
+                currency=s["currency"],
+                vacancy_title=vacancy.get("name"),
+                vacancy_url=vacancy.get("alternate_url"),
+                employer_name=vacancy.get("employer", {}).get("name")
+            ) 
+            for s, vacancy in zip(salary_dicts, vacancies)
+        ]
 
         logger.info("Generating development plan...")
-        raw_plan = call_llm(build_development_plan_prompt(skills, filters.get("region", "113"), filters))
-        development_plan = [line.strip() for line in raw_plan.splitlines() if line.strip()][:10]
+        raw_plan = call_llm(build_development_plan_prompt(skills, filters.get("region", "113"), filters), system_prompt=None, model=request.model)
+        development_plan = clean_llm_list_output(raw_plan, max_items=6)
+        # Фолбэк если clean вернул пустоту
+        if not development_plan:
+            development_plan = [line.strip() for line in raw_plan.splitlines() if line.strip()][:6]
 
-        profile_title_raw = call_llm(build_profile_title_prompt(full_dialogue_text)).strip(" \n.\"'*")
+        logger.info("Generating additional skills...")
+        raw_additional = call_llm(build_additional_skills_prompt(skills, full_dialogue_text), system_prompt=None, model=request.model)
+        additional_skills = clean_llm_list_output(raw_additional, max_items=6)
+        if not additional_skills:
+            additional_skills = [line.strip() for line in raw_additional.splitlines() if line.strip()][:6]
+
+        profile_title_raw = call_llm(build_profile_title_prompt(full_dialogue_text), system_prompt=None, model=request.model).strip(" \n.\"'*")
         
         return AnalyzeResponse(
             average_salary=stats["average"],
@@ -455,6 +555,7 @@ def analyze(request: AnalyzeRequest):
             vacancies_found=len(vacancies),
             salary_values=salary_values,
             skills=skills,
+            additional_skills=additional_skills,
             development_plan=development_plan,
             profile_title=profile_title_raw,
             message="Анализ выполнен успешно."

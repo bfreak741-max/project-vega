@@ -10,3 +10,8 @@ dependencies = [
     "requests==2.31.0",
     "pydantic==2.11.0",
 ]
+
+[dependency-groups]
+dev = [
+    "python-dotenv>=1.2.2",
+]
