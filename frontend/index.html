@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Сколько я стою?</title>
+  <link rel="stylesheet" href="style.css?v=4" />
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero__container">
+        <h1>Сколько я стою?</h1>
+        <p>Анализируй навыки, регион и формат работы и получай рыночную зарплатную вилку вместе с планом развития.</p>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <form id="analyze-form" class="form-card">
+        <label>Чат-интервью</label>
+        <div class="chat-container">
+          <div id="chat-history" class="chat-history">
+            <div class="chat-message assistant">
+              <div class="chat-avatar">AI</div>
+              <div class="chat-content">Привет! Отправь мне текст своего резюме или просто (можно даже своими словами) опиши свой стек технологий и опыт. Я задам несколько вопросов, чтобы подобрать для тебя подходящие вакансии и определить зарплатную вилку!</div>
+            </div>
+          </div>
+          <div class="chat-input-wrapper">
+            <textarea id="text" name="text" rows="1" placeholder="Сообщение..."></textarea>
+            <button type="button" id="send-msg-btn" class="send-button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <p id="status" class="status"></p>
+      </form>
+    </section>
+
+    <section id="result" class="result-section hidden">
+      <div class="result-card">
+        <h2>Результаты анализа</h2>
+        <div class="result-grid">
+          <div class="result-item">
+            <span>Вакансий найдено</span>
+            <strong id="vacancies-count">0</strong>
+          </div>
+          <div class="result-item">
+            <span>Минимальная зарплата</span>
+            <strong id="min-salary">—</strong>
+          </div>
+          <div class="result-item">
+            <span>Средняя зарплата</span>
+            <strong id="avg-salary">—</strong>
+          </div>
+          <div class="result-item">
+            <span>Максимальная зарплата</span>
+            <strong id="max-salary">—</strong>
+          </div>
+        </div>
+
+        <div class="result-block">
+          <h3>Навыки</h3>
+          <ul id="skills-list" class="bullet-list"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>План развития</h3>
+          <ol id="plan-list"></ol>
+        </div>
+
+        <div class="result-block">
+          <h3>График зарплат</h3>
+          <div id="chart" class="chart-placeholder">Здесь появится график</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="app.js?v=7"></script>
+</body>
+</html>
